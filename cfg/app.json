@@ -1,0 +1,25 @@
+{
+    "mode": "simple_csv",
+    "plot": {
+        "style": "default",
+        "linestyle": "solid",
+        "linewidth": 1.0,
+        "marker": false,
+        "use_mpl_toolbar": false,
+        "cursor": {
+            "style": "dashed",
+            "width": 0.75,
+            "color": "magenta"
+        }
+    },
+    "simple_csv": {
+        "delimiter": ";",
+        "timestamp": "timestamp",
+        "scales": {}
+    },
+    "j1939_dump": {
+        "asc_base": "hex",
+        "asc_rel_timestamp": true,
+        "db": []
+    }
+}
