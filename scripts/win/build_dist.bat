@@ -29,10 +29,6 @@ pyinstaller --clean log_viewer.spec
 for /f "delims=" %%i in ('python src\log_viewer\version.py') do set VER=%%i
 call .venv\Scripts\deactivate.bat
 
-mkdir dist\release\cfg
-
-copy cfg\app.json dist\release\cfg\app.json
-
 %ZIP%\7z.exe a "%CUR_DIR%\dist\log_viewer_%VER%.zip" "%CUR_DIR%\dist\release" 
 
 exit /b %ERRORLEVEL%

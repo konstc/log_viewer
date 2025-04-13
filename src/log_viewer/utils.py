@@ -1,21 +1,30 @@
 """ Log viewer's extra utilites module """
 
+import sys
+
 from pathlib import Path
 
-APP_RESOURCE_PATH = "resource"
-APP_SETTINGS_PATH = "cfg"
+def _get_base_path() -> Path:
+    """
+    Gets base path to the current directory
+    """
+    try:
+        base_path = Path(getattr(sys, "_MEIPASS"))
+    except AttributeError:
+        base_path = Path.cwd()
+    return base_path
 
 def get_settings_path() -> Path:
     """
     Gets path to 'app.json' file
     """
-    return Path(APP_SETTINGS_PATH).resolve() / "app.json"
+    return (_get_base_path() / "cfg").resolve() / "app.json"
 
 def get_resource_path() -> Path:
     """
     Gets path to 'resource' folder
     """
-    return Path(APP_RESOURCE_PATH).resolve()
+    return (_get_base_path() / "resource").resolve()
 
 def get_icons_path() -> Path:
     """

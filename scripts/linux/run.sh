@@ -2,5 +2,5 @@
 
 source scripts/linux/create_venv.sh
 source .venv/bin/activate
-pyqt6-tools designer
+python src/log_viewer/log_viewer.py
 deactivate

@@ -1,5 +1,5 @@
 @setlocal
-@echo on
+@echo off
 
 rem This script should be executed from the root of the repository
 
