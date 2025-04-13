@@ -1,7 +1,9 @@
 **/__pycache__/
-build/
-dist/
 .coverage
 .pytest_cache/
 .venv/
+.vscode/
+coverage.json
+build/
+dist/
 debug.log
