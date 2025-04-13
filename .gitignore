@@ -1,6 +1,7 @@
 **/__pycache__/
 build/
 dist/
+.coverage
 .pytest_cache/
 .venv/
 debug.log
