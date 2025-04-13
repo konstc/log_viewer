@@ -5,6 +5,7 @@ pandas      == 2.2.*
 pyinstaller == 6.12.*
 pytest      == 8.3.*
 pytest-qt   == 4.4.*
+pytest-xvfb == 3.1.*
 PyQt6       == 6.4.*
 pyqt6-tools == 6.4.*
 scipy       == 1.13.*
