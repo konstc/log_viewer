@@ -37,6 +37,7 @@ Please note that after creating the executable file on the Windows platform, an 
 There are two main modes:
 - Simple CSV reader;
 - J1939 dump decoder;
+
 You can switch between them in Application->Settings->General->Mode.
 
 ### Simple CSV reader
