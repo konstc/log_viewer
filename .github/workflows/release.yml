@@ -28,6 +28,7 @@ jobs:
           prerelease: false
 
   ubuntu_build:
+    name: Ubuntu build
     needs: create_release
     runs-on: ubuntu-latest
     permissions:
@@ -49,12 +50,13 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          upload_url: ${{ needs.create_release.outputs.upload_url }}
           asset_path: ./dist/log_viewer-linux-x86_64.tar.gz
           asset_name: log_viewer-linux-x86_64.tar.gz
           asset_content_type: application/gzip
   
   windows_build:
+    name: Windows build
     needs: create_release
     runs-on: windows-latest
     permissions:
@@ -76,7 +78,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          upload_url: ${{ needs.create_release.outputs.upload_url }}
           asset_path: dist\log_viewer-windows-AMD64.zip
           asset_name: log_viewer-windows-AMD64.zip
           asset_content_type: application/zip
