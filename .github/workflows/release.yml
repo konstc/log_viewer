@@ -6,7 +6,29 @@ on:
       - '*'
 
 jobs:
+  create_release:
+    name: Create release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+      repository-projects: write
+    outputs:
+      upload_url: ${{ steps.create_release.outputs.upload_url }}
+    steps:
+      - name: Create release
+        id: create_release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ github.ref }}
+          release_name: Release ${{ github.ref }}
+          draft: false
+          prerelease: false
+
   ubuntu_build:
+    needs: create_release
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -21,16 +43,6 @@ jobs:
       - name: Build artifact
         run: |
           ./scripts/linux/build_dist.sh
-      - name: Create release
-        id: create_release
-        uses: actions/create-release@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          tag_name: ${{ github.ref }}
-          release_name: Release ${{ github.ref }}
-          draft: false
-          prerelease: false
       - name: Upload linux asset
         id: upload-linux-asset 
         uses: actions/upload-release-asset@v1
@@ -43,6 +55,7 @@ jobs:
           asset_content_type: application/gzip
   
   windows_build:
+    needs: create_release
     runs-on: windows-latest
     permissions:
       contents: write
@@ -57,16 +70,6 @@ jobs:
       - name: Build artifact
         run: |
           scripts\win\build_dist.bat
-      - name: Create release
-        id: create_release
-        uses: actions/create-release@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          tag_name: ${{ github.ref }}
-          release_name: Release ${{ github.ref }}
-          draft: false
-          prerelease: false
       - name: Upload windows asset
         id: upload-windows-asset 
         uses: actions/upload-release-asset@v1
