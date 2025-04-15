@@ -32,6 +32,8 @@ If you need to build an executable file, you can do this using [pyinstaller](htt
 
 Please note that after creating the executable file on the Windows platform, an application archive is created using [7-Zip](https://www.7-zip.org/). Install it first.
 
+In addition, you can download precompiled releases for Windows/Linux on the [Releases](https://github.com/konstc/log_viewer/releases) page.
+
 ## How to use
 
 There are two main modes:
