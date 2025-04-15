@@ -26,10 +26,9 @@ if exist dist (
 
 call .venv\Scripts\activate.bat
 pyinstaller --clean log_viewer.spec
-for /f "delims=" %%i in ('python src\log_viewer\version.py') do set VER=%%i
 call .venv\Scripts\deactivate.bat
 
-%ZIP%\7z.exe a "%CUR_DIR%\dist\log_viewer_%VER%.zip" "%CUR_DIR%\dist\release" 
+%ZIP%\7z.exe a "%CUR_DIR%\dist\log_viewer-windows-%PROCESSOR_ARCHITECTURE%.zip" "%CUR_DIR%\dist\release" 
 
 exit /b %ERRORLEVEL%
 

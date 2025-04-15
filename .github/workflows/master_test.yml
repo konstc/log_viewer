@@ -1,4 +1,4 @@
-name: Log Viewer multiplatform test
+name: Log Viewer master test
 
 on:
   push:
@@ -11,9 +11,7 @@ permissions:
 
 jobs:
   ubuntu_test:
-
     runs-on: ubuntu-latest
-
     steps:
     - uses: actions/checkout@v4
     - name: Set up Python 3.10
@@ -29,9 +27,7 @@ jobs:
         ./scripts/linux/test.sh
   
   windows_test:
-
     runs-on: windows-latest
-
     steps:
     - uses: actions/checkout@v4
     - name: Set up Python 3.10
