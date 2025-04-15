@@ -1,7 +1,4 @@
-# This workflow will install Python dependencies, run tests and lint with a single version of Python
-# For more information see: https://docs.github.com/en/actions/automating-builds-and-tests/building-and-testing-python
-
-name: Log Viewer test (Ubuntu)
+name: Log Viewer multiplatform test
 
 on:
   push:
@@ -13,7 +10,7 @@ permissions:
   contents: read
 
 jobs:
-  build:
+  ubuntu_test:
 
     runs-on: ubuntu-latest
 
@@ -30,3 +27,17 @@ jobs:
     - name: Test with pytest
       run: |
         ./scripts/linux/test.sh
+  
+  windows_test:
+
+    runs-on: windows-latest
+
+    steps:
+    - uses: actions/checkout@v4
+    - name: Set up Python 3.10
+      uses: actions/setup-python@v3
+      with:
+        python-version: "3.10"
+    - name: Test with pytest
+      run: |
+        ./scripts/windows/test.sh
