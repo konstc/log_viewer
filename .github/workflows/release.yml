@@ -8,6 +8,10 @@ on:
 jobs:
   ubuntu_build:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+      repository-projects: write
     steps:
       - uses: actions/checkout@v4
       - name: Set up Python 3.10
@@ -40,6 +44,10 @@ jobs:
   
   windows_build:
     runs-on: windows-latest
+    permissions:
+      contents: write
+      pull-requests: write
+      repository-projects: write
     steps:
       - uses: actions/checkout@v4
       - name: Set up Python 3.10
