@@ -3,7 +3,7 @@
 rm -rf build
 rm -rf dist
 
-source scripts/linux/create_venv.sh
+source scripts/linux/create_venv.sh dist
 source .venv/bin/activate
 pyinstaller --clean log_viewer.spec
 ARCH=$(uname -m)
