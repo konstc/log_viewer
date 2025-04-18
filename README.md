@@ -32,6 +32,8 @@ If you need to build an executable file, you can do this using [pyinstaller](htt
 
 Please note that after creating the executable file on the Windows platform, an application archive is created using [7-Zip](https://www.7-zip.org/). Install it first.
 
+In addition, you can download precompiled releases for Windows/Linux on the [Releases](https://github.com/konstc/log_viewer/releases) page.
+
 ## How to use
 
 There are two main modes:
@@ -54,10 +56,16 @@ In this mode, you can view logs of the following formats:
 
 To decode messages, please specify the databases to use in Application->Settings->J1939 dump decoder->Database setup.
 
-When decoding, all signals from messages are placed in a list for viewing in the following form:
+When decoding, all signals from messages are placed in a list for browsing in one of the following forms depending on PDU format:
 
 ```
-vcanX.ECUYYY.SignalZ
+PDU format 1:
+{can}.SA{sa}.PDU1.DA{da}.{msg}
 ```
 
-where X is the used CAN interface (0 by default), YYY - ECU's SA, SignalZ - name of the decoded signal.
+```
+PDU format 2:
+{can}.SA{sa}.PDU2.GE{ge}.{msg}
+```
+
+where `{can}` is the used CAN interface (can be omitted if not specified in the log), `{sa}` - ECU's SA, `{da}` - destination address, `{ge}` - group extension, `{msg}` - name of the decoded signal in format `Message.Signal`.

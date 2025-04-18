@@ -27,7 +27,7 @@ class Ui_AboutDialog(object):
         self.versionLabel.setTextInteractionFlags(QtCore.Qt.TextInteractionFlag.NoTextInteraction)
         self.versionLabel.setObjectName("versionLabel")
         self.homeLink = QtWidgets.QLabel(parent=AboutDialog)
-        self.homeLink.setGeometry(QtCore.QRect(10, 40, 49, 16))
+        self.homeLink.setGeometry(QtCore.QRect(10, 40, 251, 16))
         self.homeLink.setTextFormat(QtCore.Qt.TextFormat.RichText)
         self.homeLink.setOpenExternalLinks(True)
         self.homeLink.setTextInteractionFlags(QtCore.Qt.TextInteractionFlag.LinksAccessibleByMouse|QtCore.Qt.TextInteractionFlag.TextEditable|QtCore.Qt.TextInteractionFlag.TextEditorInteraction|QtCore.Qt.TextInteractionFlag.TextSelectableByKeyboard|QtCore.Qt.TextInteractionFlag.TextSelectableByMouse)
@@ -48,5 +48,5 @@ class Ui_AboutDialog(object):
         _translate = QtCore.QCoreApplication.translate
         AboutDialog.setWindowTitle(_translate("AboutDialog", "About"))
         self.versionLabel.setText(_translate("AboutDialog", "Log Viewer v."))
-        self.homeLink.setText(_translate("AboutDialog", "<html><head/><body><p>Home: </p></body></html>"))
+        self.homeLink.setText(_translate("AboutDialog", "<html><head/><body><p>Home: <a href=\"\\&quot;https://github.com/konstc/log_viewer\\&quot;\"><span style=\" text-decoration: underline; color:#0000ff;\">https://github.com/konstc/log_viewer</span></a></p></body></html>"))
         self.iconsLink.setText(_translate("AboutDialog", "<html><head/><body><p>Icons: <a href=\"\\&quot;http://icons8.com/\\&quot;\"><span style=\" text-decoration: underline; color:#0000ff;\">http://icons8.com</span></a></p></body></html>"))
