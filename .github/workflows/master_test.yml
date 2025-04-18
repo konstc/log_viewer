@@ -11,11 +11,11 @@ permissions:
 
 jobs:
   ubuntu_test:
-    name: Ubuntu - test with Python 3.9/3.10/3.11
+    name: Ubuntu - test with Python
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        python-versions: ["3.9", "3.10", "3.11"]
+        python-version: ["3.9", "3.10", "3.11"]
     steps:
       - uses: actions/checkout@v4
       - name: Set up Python ${{ matrix.python-version }}
@@ -33,11 +33,11 @@ jobs:
           ./scripts/linux/test.sh
 
   windows_test_3_11:
-    name: Windows - test with Python 3.9/3.10/3.11
+    name: Windows - test with Python
     runs-on: windows-latest
     strategy:
       matrix:
-        python-versions: ["3.9", "3.10", "3.11"]
+        python-version: ["3.9", "3.10", "3.11"]
     steps:
       - uses: actions/checkout@v4
       - name: Set up Python ${{ matrix.python-version }}
