@@ -32,7 +32,7 @@ jobs:
         run: |
           ./scripts/linux/test.sh
 
-  windows_test_3_11:
+  windows_test:
     name: Windows - test with Python
     runs-on: windows-latest
     strategy:
