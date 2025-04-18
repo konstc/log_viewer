@@ -5,7 +5,7 @@ rem This script should be executed from the root of the repository
 
 set CUR_DIR=%cd%
 
-call scripts\win\create_venv.bat dist
+call scripts\win\create_venv.bat
 
 if exist "C:\Program files\7-Zip\7z.exe" (
     set ZIP="C:\Program files\7-Zip\"

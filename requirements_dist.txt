@@ -1,7 +1,0 @@
-cantools    == 40.2.*
-jsonschema  == 4.23.*
-matplotlib  == 3.7.*
-pandas      == 2.2.*
-pyinstaller == 6.12.*
-PyQt6       == 6.4.*
-scipy       == 1.13.*
