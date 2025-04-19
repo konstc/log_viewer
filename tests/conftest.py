@@ -5,6 +5,9 @@ import os
 import pytest
 import pandas as pd
 
+from settings_dialog import AppearanceSettings, CursorSettings, SettingsData, \
+                            SimpleCsvSettings, J1939DumpSettings
+
 @pytest.fixture
 def setup_plot_item_list():
     """
@@ -29,3 +32,34 @@ def setup_j1939_dump_file(tmp_path):
     }).to_csv(path, index=False)
     yield path
     os.remove(path)
+
+@pytest.fixture
+def setup_settings_data():
+    """
+    Generate sample settings data
+    """
+    return SettingsData(
+        "simple_csv",
+        AppearanceSettings(
+            CursorSettings(
+                "dashed",
+                0.75,
+                "magenta"
+            ),
+            "default",
+            "solid",
+            1.0,
+            False,
+            False
+        ),
+        SimpleCsvSettings(
+            ";",
+            "timestamp",
+            {}
+        ),
+        J1939DumpSettings(
+            "hex",
+            True,
+            []
+        )
+    )

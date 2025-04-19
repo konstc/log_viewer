@@ -4,6 +4,7 @@ matplotlib  == 3.7.*
 pandas      == 2.2.*
 pyinstaller == 6.12.*
 pytest      == 8.3.*
+pytest-cov  == 6.1.*
 pytest-qt   == 4.4.*
 pytest-xvfb == 3.1.*
 PyQt6       == 6.4.*
