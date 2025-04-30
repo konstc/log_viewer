@@ -2,7 +2,9 @@
 
 from abc import ABC, abstractmethod
 import enum
+import json
 import os
+import tempfile
 
 import can
 import cantools
@@ -66,7 +68,7 @@ class BasePlotter(ABC):
         """
         return LogOpenProgress.OPEN_FAILED
 
-    # pylint: disable-next=too-many-locals,too-many-arguments
+    # pylint: disable-next=too-many-locals,too-many-arguments,too-many-positional-arguments
     def plot(self,
              vars_set: list[list[str]],
              spectrum: bool,
@@ -197,7 +199,7 @@ class J1939DumpPlotter(BasePlotter):
         self._processed = 0
         self._reader = None
         self._msg_iterator = None
-        self._msg_list = []
+        self._temp_file = None
 
     @property
     def processed(self) -> int:
@@ -218,6 +220,7 @@ class J1939DumpPlotter(BasePlotter):
             return (_msg.name, _msg.decode(msg.data, decode_choices=False))
         return (None, None)
 
+    # pylint: disable-next=too-many-branches,too-many-statements
     def open(self) -> LogOpenProgress:
         """
         Performs an opening step
@@ -248,14 +251,24 @@ class J1939DumpPlotter(BasePlotter):
             # Generate an iterator
             self._msg_iterator = iter(self._reader)
 
-            self._msg_list = []
             self._processed = 0
             self._open_progress = LogOpenProgress.OPEN_IN_PROGRESS
+            # pylint: disable-next=consider-using-with
+            self._temp_file = tempfile.NamedTemporaryFile(
+                delete=False, mode='w+', suffix='.jsonl'
+            )
 
         try:
             msg = next(self._msg_iterator)
         except StopIteration as exc:
-            self._df = pd.DataFrame.from_dict(self._msg_list)
+            self._temp_file.flush()
+            self._temp_file.seek(0)
+            self._df = pd.read_json(
+                self._temp_file.name, lines=True, convert_dates=False
+            )
+            print(self._temp_file.name)
+            self._temp_file.close()
+            os.unlink(self._temp_file.name)
             self._df.dropna(axis="columns", how="all", inplace=True)
             if self._timestamp in self._df.columns:
                 self._opened = True
@@ -264,7 +277,6 @@ class J1939DumpPlotter(BasePlotter):
                 self._open_progress = LogOpenProgress.OPEN_FAILED
                 raise ImportError("No data to plot in the given file",
                                   path=self._filename) from exc
-            self._msg_list = []
         else:
             decoded = self.__decode_message(msg)
             if decoded[0]:
@@ -293,7 +305,8 @@ class J1939DumpPlotter(BasePlotter):
                 msg_data = {self._timestamp: msg.timestamp}
                 for sig, value in decoded[1].items():
                     msg_data[data_key + "." + sig] = value
-                self._msg_list.append(msg_data)
+                json.dump(msg_data, self._temp_file)
+                self._temp_file.write('\n')
             self._processed += 1
 
         return self._open_progress

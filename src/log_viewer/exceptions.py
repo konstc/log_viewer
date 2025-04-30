@@ -14,7 +14,7 @@ class LogViewerError(Exception):
     ) -> None:
         self._error_code = error_code
         super().__init__(
-            message if error_code is None else 
+            message if error_code is None else
             f"{message} [Error Code {error_code}]"
         )
 

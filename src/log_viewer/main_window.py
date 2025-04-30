@@ -350,8 +350,6 @@ class MainWindow(QMainWindow): # pylint: disable=too-many-instance-attributes
                 except PlotterInitError as err:
                     logging.error(err, exc_info=True)
                     QMessageBox.critical(None, "Critical error", str(err))
-            else:
-                return
 
     def __save_settings(self) -> None:
         """
