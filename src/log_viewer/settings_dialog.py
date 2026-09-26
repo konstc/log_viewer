@@ -4,7 +4,7 @@ from dataclasses import dataclass
 import locale
 from pathlib import Path
 
-import matplotlib.pyplot as plt
+from matplotlib import style as mpl_style
 from PyQt6.QtGui import QDoubleValidator, QRegularExpressionValidator
 from PyQt6.QtCore import Qt, QRegularExpression, pyqtSlot
 from PyQt6.QtWidgets import QDialog, QFileDialog, QLineEdit, QTableWidgetItem
@@ -89,7 +89,7 @@ class SettingsDialog(QDialog):
             self._ui.tabWidget.setTabEnabled(1, False)
             self._ui.tabWidget.setTabEnabled(2, False)
 
-        style_list = ["default"] + plt.style.available
+        style_list = ["default"] + mpl_style.available
         self._ui.plotStyleSelectorBox.addItems(style_list)
         self._ui.plotStyleSelectorBox.setCurrentText(
             self._settings.appearance.plotstyle

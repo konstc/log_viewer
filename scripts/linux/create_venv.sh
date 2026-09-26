@@ -5,7 +5,6 @@ if [ ! -d ".venv" ]; then
     source .venv/bin/activate
     python -m pip install --upgrade pip
     pip install -r requirements.txt
-    fi
     deactivate
     echo Python virtual environment is created in .venv
 else

@@ -78,7 +78,9 @@ def test_main_window(qtbot):
     """
     Unit-tests for MainWindow methods
 
-    Step 0:
+    Step 0: Instantiate a MainWindow object
+    Step 1: Check that there is no opened plot windows
+    Step 2: Check that there is no instantiated plotter
     """
     window = MainWindow()
 

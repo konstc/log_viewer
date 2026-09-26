@@ -159,7 +159,7 @@ class PlotWindow(QWidget):
 
     closed = pyqtSignal(str)
 
-    # pylint: disable-next=too-many-locals,too-many-arguments
+    # pylint: disable-next=too-many-locals,too-many-arguments,too-many-positional-arguments
     def __init__(self,
                  plot_set: list[list[pd.DataFrame]],
                  title: str,

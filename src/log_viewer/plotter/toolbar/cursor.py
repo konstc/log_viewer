@@ -19,7 +19,7 @@ class PlotterToolbarCursor(PlotterBaseTool):
     cursor_placed = pyqtSignal(bool)
     cursor_moved = pyqtSignal(float)
 
-    # pylint: disable-next=too-many-arguments
+    # pylint: disable-next=too-many-arguments,too-many-positional-arguments
     def __init__(self,
                  canvas: FigureCanvasQTAgg,
                  nav_stack: Stack,
