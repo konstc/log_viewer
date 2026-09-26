@@ -164,6 +164,42 @@ class SimpleCsvPlotter(BasePlotter):
         self._opened = True
         return LogOpenProgress.OPEN_COMPLETED
 
+_INT_DTYPES = [numpy.dtype(x) for x in ("int8", "uint8", "int16", "uint16",
+                                        "int32", "uint32", "int64", "uint64")]
+
+def _signal_dtype(signal) -> numpy.dtype:
+    """
+    Returns the smallest dtype which holds all decoded values of the given
+    cantools 'signal'. Multiplexed signals may be absent in a message, so they
+    always get a float dtype to be able to store NaN.
+    """
+    scale, offset = signal.scale, signal.offset
+    if signal.is_float:
+        if signal.length == 32 and scale == 1 and offset == 0:
+            return numpy.dtype(numpy.float32)
+        return numpy.dtype(numpy.float64)
+
+    if signal.is_signed:
+        raw_min = -(1 << (signal.length - 1))
+        raw_max = (1 << (signal.length - 1)) - 1
+    else:
+        raw_min, raw_max = 0, (1 << signal.length) - 1
+    val_min, val_max = sorted((raw_min * scale + offset,
+                               raw_max * scale + offset))
+
+    if (signal.multiplexer_ids is None and float(scale).is_integer()
+            and float(offset).is_integer()):
+        for dtype in _INT_DTYPES:
+            info = numpy.iinfo(dtype)
+            if info.min <= val_min and val_max <= info.max:
+                return dtype
+
+    # float32 keeps every step of the signal distinguishable if the number of
+    # steps from zero fits into its 24-bit mantissa
+    if scale and max(abs(val_min), abs(val_max)) / abs(scale) < (1 << 24):
+        return numpy.dtype(numpy.float32)
+    return numpy.dtype(numpy.float64)
+
 class _MessageStore:
     """
     Temporary on-disk storage of decoded rows of one J1939 message instance.
@@ -171,13 +207,19 @@ class _MessageStore:
     file when the buffer is full.
     """
 
-    def __init__(self, path: str, signals: list[str], buffer_rows: int) -> None:
+    def __init__(self, path: str, signals: list, buffer_rows: int) -> None:
+        """
+        :param signals: list of cantools signals of the message
+        """
         self._path = path
-        # Column 0 is a timestamp, the rest are signals in the DBC order
-        self.signals = signals
-        self._index = {sig: idx + 1 for idx, sig in enumerate(signals)}
-        self._buffer = numpy.empty((buffer_rows, len(signals) + 1),
-                                   dtype=numpy.float64)
+        self.signals = [sig.name for sig in signals]
+        # Field 0 is a timestamp, the rest are signals in the DBC order
+        self._dtype = numpy.dtype(
+            [("f0", numpy.float64)] +
+            [(f"f{idx + 1}", _signal_dtype(sig))
+             for idx, sig in enumerate(signals)]
+        )
+        self._buffer = numpy.empty(buffer_rows, dtype=self._dtype)
         self._count = 0
 
     def append(self, timestamp: float, values: dict) -> None:
@@ -185,11 +227,9 @@ class _MessageStore:
         Appends a row with the given 'timestamp' and decoded signal 'values'.
         Signals absent in 'values' (e.g. multiplexed ones) are stored as NaN.
         """
-        row = self._buffer[self._count]
-        row.fill(numpy.nan)
-        row[0] = timestamp
-        for sig, value in values.items():
-            row[self._index[sig]] = value
+        self._buffer[self._count] = (timestamp, *(
+            values.get(sig, numpy.nan) for sig in self.signals
+        ))
         self._count += 1
         if self._count == len(self._buffer):
             self.flush()
@@ -209,9 +249,11 @@ class _MessageStore:
         signal columns. Signals which have no values are dropped.
         """
         self.flush()
-        data = numpy.fromfile(self._path, dtype=numpy.float64)
-        data = data.reshape(-1, len(self.signals) + 1)
-        df = pd.DataFrame(data, columns=[timestamp] + self.signals)
+        data = numpy.fromfile(self._path, dtype=self._dtype)
+        df = pd.DataFrame({
+            name: data[field] for name, field
+            in zip([timestamp] + self.signals, self._dtype.names)
+        })
         return df.dropna(axis="columns", how="all")
 
 # pylint: disable-next=too-many-instance-attributes
@@ -224,6 +266,7 @@ class J1939DumpPlotter(BasePlotter):
     PDU1_TEMPLATE = "{can}SA{sa}.PDU1.DA{da}.{msg}"
     PDU2_TEMPLATE = "{can}SA{sa}.PDU2.GE{ge}.{msg}"
     BUFFER_ROWS = 1024
+    BATCH_FRAMES = 1000
 
     def __init__(self,
                  filename: os.PathLike[str],
@@ -277,9 +320,11 @@ class J1939DumpPlotter(BasePlotter):
 
     def _get_series(self, var: str) -> pd.DataFrame:
         key, sig = self._vars[var]
+        # Signals are stored in compact dtypes, but plot utils (e.g. RMS)
+        # expect float values to avoid integer overflows
         return self._frames[key][[self._timestamp, sig]].dropna(
             subset=sig
-        ).rename(columns={sig: var})
+        ).astype({sig: numpy.float64}).rename(columns={sig: var})
 
     def close(self) -> None:
         """
@@ -310,9 +355,7 @@ class J1939DumpPlotter(BasePlotter):
         if store is None:
             path = os.path.join(self._temp_dir.name,
                                 str(len(self._stores)) + ".bin")
-            store = _MessageStore(path,
-                                  [sig.name for sig in db_msg.signals],
-                                  self.BUFFER_ROWS)
+            store = _MessageStore(path, db_msg.signals, self.BUFFER_ROWS)
             self._stores[key] = store
         return store
 
@@ -328,10 +371,42 @@ class J1939DumpPlotter(BasePlotter):
             for sig in df.columns[1:]:
                 self._vars[key + "." + sig] = (key, sig)
 
-    # pylint: disable-next=too-many-branches,too-many-statements
+    def __store_message(self, msg: can.Message) -> None:
+        """
+        Decodes the given CAN message 'msg' and stores it to a store of its
+        message instance. Messages absent in the database are skipped.
+        """
+        db_msg, decoded = self.__decode_message(msg)
+        if not db_msg:
+            return
+        if msg.channel:
+            if isinstance(msg.channel, str):
+                can_ch = msg.channel + "."
+            else:
+                can_ch = "CAN" + str(msg.channel) + "."
+        else:
+            can_ch = ""
+        frame_unp = cantools.j1939.frame_id_unpack(msg.arbitration_id)
+        if cantools.j1939.is_pdu_format_1(frame_unp.pdu_format):
+            data_key = self.PDU1_TEMPLATE.format(
+                can=can_ch,
+                sa=str(frame_unp.source_address),
+                da=str(frame_unp.pdu_specific),
+                msg=db_msg.name
+            )
+        else:
+            data_key = self.PDU2_TEMPLATE.format(
+                can=can_ch,
+                sa=str(frame_unp.source_address),
+                ge=str(frame_unp.pdu_specific),
+                msg=db_msg.name
+            )
+        self.__get_store(data_key, db_msg).append(msg.timestamp, decoded)
+
+    # pylint: disable-next=too-many-branches
     def open(self) -> LogOpenProgress:
         """
-        Performs an opening step
+        Performs an opening step: processes up to BATCH_FRAMES messages
         """
 
         if self._open_progress == LogOpenProgress.OPEN_FAILED:
@@ -364,47 +439,23 @@ class J1939DumpPlotter(BasePlotter):
             self.close()
             self._temp_dir = tempfile.TemporaryDirectory()
 
-        try:
-            msg = next(self._msg_iterator)
-        except StopIteration as exc:
+        for _ in range(self.BATCH_FRAMES):
             try:
-                self.__load_frames()
-            finally:
-                self.close()
-            if self._vars:
-                self._opened = True
-                self._open_progress = LogOpenProgress.OPEN_COMPLETED
-            else:
-                self._open_progress = LogOpenProgress.OPEN_FAILED
-                raise ImportError("No data to plot in the given file",
-                                  path=self._filename) from exc
-        else:
-            db_msg, decoded = self.__decode_message(msg)
-            if db_msg:
-                if msg.channel:
-                    if isinstance(msg.channel, str):
-                        can_ch = msg.channel + "."
-                    else:
-                        can_ch = "CAN" + str(msg.channel) + "."
+                msg = next(self._msg_iterator)
+            except StopIteration as exc:
+                try:
+                    self.__load_frames()
+                finally:
+                    self.close()
+                if self._vars:
+                    self._opened = True
+                    self._open_progress = LogOpenProgress.OPEN_COMPLETED
                 else:
-                    can_ch = ""
-                frame_unp = cantools.j1939.frame_id_unpack(msg.arbitration_id)
-                if cantools.j1939.is_pdu_format_1(frame_unp.pdu_format):
-                    data_key = self.PDU1_TEMPLATE.format(
-                        can=can_ch,
-                        sa=str(frame_unp.source_address),
-                        da=str(frame_unp.pdu_specific),
-                        msg=db_msg.name
-                    )
-                else:
-                    data_key = self.PDU2_TEMPLATE.format(
-                        can=can_ch,
-                        sa=str(frame_unp.source_address),
-                        ge=str(frame_unp.pdu_specific),
-                        msg=db_msg.name
-                    )
-                self.__get_store(data_key, db_msg).append(msg.timestamp,
-                                                          decoded)
+                    self._open_progress = LogOpenProgress.OPEN_FAILED
+                    raise ImportError("No data to plot in the given file",
+                                      path=self._filename) from exc
+                break
+            self.__store_message(msg)
             self._processed += 1
 
         return self._open_progress

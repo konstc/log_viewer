@@ -3,6 +3,7 @@
 import logging
 
 import can
+import cantools
 from PyQt6.QtCore import QObject, QThread, pyqtSignal, pyqtSlot
 from PyQt6.QtWidgets import QDialog, QMessageBox
 
@@ -30,16 +31,21 @@ class ImportWorker(QObject):
         """
         Processes opening of given plotter object
         """
-        while not self._plotter.is_opened:
-            if QThread.currentThread().isInterruptionRequested():
-                return
-            try:
-                self._plotter.open()
-                self.processed.emit(self._plotter.processed)
-            except (ImportError, ValueError, can.io.blf.BLFParseError) as err:
-                logging.error(err, exc_info=True)
-                self.failed.emit(str(err))
-                return
+        try:
+            while not self._plotter.is_opened:
+                if QThread.currentThread().isInterruptionRequested():
+                    return
+                try:
+                    self._plotter.open()
+                    self.processed.emit(self._plotter.processed)
+                except (ImportError, ValueError, can.io.blf.BLFParseError,
+                        cantools.database.DecodeError) as err:
+                    logging.error(err, exc_info=True)
+                    self.failed.emit(str(err))
+                    return
+        finally:
+            # Remove temporary files if opening was cancelled or failed
+            self._plotter.close()
         self.finished.emit()
 
 class ImportDialog(QDialog):
