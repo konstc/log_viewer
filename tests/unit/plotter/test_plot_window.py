@@ -82,3 +82,7 @@ def test_plot_window(setup_plot_list, qtbot):
     assert props.topLevelItem(props._signals.index("sig1")).text(
         PlotProperty.RMS.value
     ) == "10.0"
+
+    # Process pending canvas redraws before the window is deleted
+    pwin.close()
+    qtbot.wait(10)
