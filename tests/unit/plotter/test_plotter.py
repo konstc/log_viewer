@@ -75,6 +75,35 @@ def test_simple_csv_plotter(setup_simple_csv_file, qtbot):
     pwin.close()
     qtbot.wait(10)
 
+def test_plotter_spectrum(setup_simple_csv_file, monkeypatch):
+    """
+    Unit-test for spectrum plotting of BasePlotter.plot()
+
+    Step 0: Open setup_simple_csv_file and call plot() method with spectrum
+    Step 1: Check that the plotted frequencies are the one-sided DFT sample
+        frequencies of the signal
+    Step 2: Check that the plotted values are magnitudes of the signal's DFT
+    """
+    plot_sets = []
+    monkeypatch.setattr("plotter.plotter.PlotWindow",
+                        lambda plot_set, **_: plot_sets.append(plot_set))
+
+    plotter = SimpleCsvPlotter(setup_simple_csv_file, ";", "timestamp", {})
+    plotter.open()
+    plotter.plot([["sig1"]], True)
+
+    signal = np.array([0, 1, 2, 1, 0, -1, -2, -1])
+    size = signal.size
+    freqs = np.arange(size // 2 + 1) / size
+    expected = np.abs([
+        np.sum(signal * np.exp(-2j * np.pi * k * np.arange(size) / size))
+        for k in range(size // 2 + 1)
+    ])
+
+    spectrum = plot_sets[0][0][0]
+    assert np.allclose(spectrum["freqs"], freqs)
+    assert np.allclose(spectrum["sig1"], expected)
+
 # pylint: disable-next=unused-argument
 def test_j1939_dump_plotter(setup_j1939_dump_file, qtbot):
     """

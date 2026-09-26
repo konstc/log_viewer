@@ -8,6 +8,15 @@ import pandas as pd
 from settings_dialog import AppearanceSettings, CursorSettings, SettingsData, \
                             SimpleCsvSettings, J1939DumpSettings
 
+@pytest.fixture(autouse=True)
+def isolate_user_settings(tmp_path, monkeypatch):
+    """
+    Redirect settings of the current user into a temporary directory, so that
+    tests neither depend on nor change the real user settings
+    """
+    monkeypatch.setenv("APPDATA", str(tmp_path / "appdata"))
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "appdata"))
+
 @pytest.fixture
 def setup_plot_item_list():
     """

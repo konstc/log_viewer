@@ -1,3 +1,11 @@
+""" Log viewer's plotter package """
+
+# pylint: disable=wrong-import-position
+import matplotlib
+
+# Backend must be selected before pyplot is imported by the modules below
+matplotlib.use("qtagg")
+
 from .exceptions import PlotterInvalidData, PlotterInitError, \
                         PlotterPlotError
 from .plotter import BasePlotter, LogOpenProgress, SimpleCsvPlotter, \
