@@ -68,6 +68,8 @@ def test_simple_csv_plotter(setup_simple_csv_file, qtbot):
 
     pwin = plotter.plot([["sig1"]], False)
     assert isinstance(pwin, PlotWindow)
+    pwin.close()
+    qtbot.wait(10)
 
 # pylint: disable-next=unused-argument
 def test_j1939_dump_plotter(setup_j1939_dump_file, qtbot):
@@ -120,6 +122,8 @@ def test_j1939_dump_plotter(setup_j1939_dump_file, qtbot):
 
     pwin = plotter.plot([["SA100.PDU2.GE0.ExampleMessageRx.RxSignal1"]], False)
     assert isinstance(pwin, PlotWindow)
+    pwin.close()
+    qtbot.wait(10)
 
 # pylint: disable-next=unused-argument
 def test_j1939_dump_plotter_instances(tmp_path, qtbot):
