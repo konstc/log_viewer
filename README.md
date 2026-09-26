@@ -42,6 +42,8 @@ There are two main modes:
 
 You can switch between them in Application->Settings->General->Mode.
 
+Settings are saved per user: in `%APPDATA%\log_viewer\app.json` on Windows and in `~/.config/log_viewer/app.json` (or `$XDG_CONFIG_HOME/log_viewer/app.json`) on Linux. Settings missing there are taken from the defaults in `cfg/app.json`. To reset the settings, delete the user's file.
+
 ### Simple CSV reader
 
 This mode allows reading of CSV files. The settings for this mode are in Application->Settings->Simple CSV reader. You can set up an alias for the delimiter (default is ";") and a timestamp column (default is "timestamp") here. In addition, if you need to apply scaling to any column, you can specify a scaling factor here. This can be useful if you have data in relative units and want to convert it to physical units. If the specified columns ​​are not found during CSV-file processing, scaling will not be applied.

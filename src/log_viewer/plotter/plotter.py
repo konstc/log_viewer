@@ -9,7 +9,6 @@ import can
 import cantools
 import numpy
 import pandas as pd
-from scipy import fft
 
 from .exceptions import PlotterInitError, PlotterPlotError
 from .plot_window import PlotWindow
@@ -102,8 +101,8 @@ class BasePlotter(ABC):
                     fft_df = pd.DataFrame()
                     df = self._get_series(var)
                     sig_len = df[self._timestamp].size
-                    fft_df["freqs"] = fft.rfftfreq(sig_len)
-                    fft_df[var] = fft.rfft(df[var].values)
+                    fft_df["freqs"] = numpy.fft.rfftfreq(sig_len)
+                    fft_df[var] = numpy.fft.rfft(df[var].values)
                     fft_df[var] = fft_df[var].apply(numpy.abs)
                     plots.append(fft_df)
             else:

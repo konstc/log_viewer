@@ -1,6 +1,9 @@
 """ Log viewer's main window module """
 
-import json
+# Dialogs and plotters are imported where they are used: they pull in pandas,
+# matplotlib and cantools, which would otherwise delay the application start
+# pylint: disable=import-outside-toplevel
+
 import logging
 
 from jsonschema import validate
@@ -10,16 +13,10 @@ from PyQt6.QtWidgets import QDialog, QFileDialog, QLabel, QListWidget, \
                             QListWidgetItem, QMainWindow, QMessageBox, \
                             QStyledItemDelegate, QStyle, QStyleOptionViewItem
 
-from about_dialog import AboutDialog
 from generated_ui import Ui_MainWindow
-from import_dialog import ImportDialog
-from plotter import SimpleCsvPlotter, J1939DumpPlotter, PlotterInitError, \
-                    PlotterPlotError
 from settings_schema import APP_SETTINGS_SCHEMA
-from settings_dialog import CursorSettings, AppearanceSettings, SettingsData, \
-                            SettingsDialog, SimpleCsvSettings, J1939DumpSettings
 from toolbar import PlotMode
-from utils import get_icons_path, get_settings_path
+from utils import get_icons_path, load_settings, save_settings
 
 class PlotItemList:
     """
@@ -201,9 +198,7 @@ class MainWindow(QMainWindow): # pylint: disable=too-many-instance-attributes
         self._plot_windows_actions = {}
         self._plotter = None
 
-        with open(str(get_settings_path()), "r",
-                  encoding="utf-8") as settings_file:
-            self._settings = json.load(settings_file)
+        self._settings = load_settings()
         validate(self._settings, APP_SETTINGS_SCHEMA)
 
         # Setup the UI from Qt Designer
@@ -319,6 +314,10 @@ class MainWindow(QMainWindow): # pylint: disable=too-many-instance-attributes
         mode
         """
         if self._file:
+            from import_dialog import ImportDialog
+            from plotter import SimpleCsvPlotter, J1939DumpPlotter, \
+                                PlotterInitError
+
             if self._settings["mode"] == "simple_csv":
                 try:
                     self._plotter = SimpleCsvPlotter(
@@ -355,10 +354,8 @@ class MainWindow(QMainWindow): # pylint: disable=too-many-instance-attributes
         """
         Performs saving current application settings to a json
         """
-        with open(str(get_settings_path()), "w",
-                  encoding="utf-8") as settings_file:
-            json.dump(self._settings, settings_file, indent=4)
-            logging.info("Changed application configuration")
+        save_settings(self._settings)
+        logging.info("Changed application configuration")
 
     @pyqtSlot()
     def file_open(self) -> None:
@@ -420,6 +417,8 @@ class MainWindow(QMainWindow): # pylint: disable=too-many-instance-attributes
         """
         Opens "About" window
         """
+        from about_dialog import AboutDialog
+
         dialog = AboutDialog()
         dialog.exec()
 
@@ -428,6 +427,10 @@ class MainWindow(QMainWindow): # pylint: disable=too-many-instance-attributes
         """
         Opens application settings dialog
         """
+        from settings_dialog import CursorSettings, AppearanceSettings, \
+                                    SettingsData, SettingsDialog, \
+                                    SimpleCsvSettings, J1939DumpSettings
+
         dialog = SettingsDialog(
             SettingsData(
                 self._settings["mode"],
@@ -491,6 +494,8 @@ class MainWindow(QMainWindow): # pylint: disable=too-many-instance-attributes
         """
         Plots selected items
         """
+        from plotter import PlotterPlotError
+
         vars_set = self._plot_items.selected_plots(self._ui.toolBar.plot_mode)
         spectrum = self._ui.actionSpectrum.isChecked()
         logging.info("Trying to plot: %s", str(vars_set))
