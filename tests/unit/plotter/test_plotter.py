@@ -1,5 +1,8 @@
 """ Unit-tests for plotter.py entities """
 
+import base64
+
+import pandas as pd
 import pytest
 
 # modules under test
@@ -117,3 +120,61 @@ def test_j1939_dump_plotter(setup_j1939_dump_file, qtbot):
 
     pwin = plotter.plot([["SA100.PDU2.GE0.ExampleMessageRx.RxSignal1"]], False)
     assert isinstance(pwin, PlotWindow)
+
+# pylint: disable-next=unused-argument
+def test_j1939_dump_plotter_instances(tmp_path, qtbot):
+    """
+    Unit-test for J1939DumpPlotter storage of message instances
+
+    Step 0: Generate a dump with ExampleMessageRx from two source addresses
+        (more rows than J1939DumpPlotter.BUFFER_ROWS for each of them)
+    Step 1: Open the dump
+    Step 2: Check that plot_vars contains signals of both instances only
+    Step 3: Check that decoded values and timestamps of each instance are
+        stored in the original order without NaN values
+    Step 4: Check that temporary files are removed
+    """
+    rows = J1939DumpPlotter.BUFFER_ROWS * 2 + 10
+    records = []
+    for idx in range(rows):
+        for src in (100, 101):
+            value = idx % 256
+            data = base64.b64encode(bytes([value, (idx + src) % 4])).decode()
+            records.append({
+                "timestamp": idx + src / 1000,
+                "arbitration_id": hex(0x0df00000 | src),
+                "extended": 1, "remote": 0, "error": 0, "dlc": 2,
+                "data": data
+            })
+    path = str(tmp_path / "dump.csv")
+    pd.DataFrame(records).to_csv(path, index=False)
+
+    plotter = J1939DumpPlotter(path, ["dbc/example_db.dbc"])
+    while plotter.open() == LogOpenProgress.OPEN_IN_PROGRESS:
+        pass
+    assert plotter.is_opened
+    assert plotter.processed == rows * 2
+
+    assert sorted(plotter.plot_vars) == [
+        "SA100.PDU2.GE0.ExampleMessageRx.RxSignal1",
+        "SA100.PDU2.GE0.ExampleMessageRx.RxSignal2",
+        "SA101.PDU2.GE0.ExampleMessageRx.RxSignal1",
+        "SA101.PDU2.GE0.ExampleMessageRx.RxSignal2",
+    ]
+
+    for src in (100, 101):
+        prefix = f"SA{src}.PDU2.GE0.ExampleMessageRx."
+        sig1 = plotter._get_series(prefix + "RxSignal1")
+        sig2 = plotter._get_series(prefix + "RxSignal2")
+        assert len(sig1) == rows and len(sig2) == rows
+        assert list(sig1["timestamp"]) == [i + src / 1000 for i in range(rows)]
+        # RxSignal1 is a signed 8-bit signal
+        assert list(sig1[prefix + "RxSignal1"]) == [
+            (i % 256) - 256 if i % 256 > 127 else i % 256 for i in range(rows)
+        ]
+        assert list(sig2[prefix + "RxSignal2"]) == [
+            (i + src) % 4 for i in range(rows)
+        ]
+
+    # pylint: disable-next=protected-access
+    assert plotter._temp_dir is None

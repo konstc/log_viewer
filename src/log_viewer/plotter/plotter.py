@@ -2,7 +2,6 @@
 
 from abc import ABC, abstractmethod
 import enum
-import json
 import os
 import tempfile
 
@@ -68,6 +67,13 @@ class BasePlotter(ABC):
         """
         return LogOpenProgress.OPEN_FAILED
 
+    def _get_series(self, var: str) -> pd.DataFrame:
+        """
+        Returns a DataFrame with timestamp and 'var' columns without NaN values
+        of 'var'
+        """
+        return self._df.filter([self._timestamp, var]).dropna(subset=var)
+
     # pylint: disable-next=too-many-locals,too-many-arguments,too-many-positional-arguments
     def plot(self,
              vars_set: list[list[str]],
@@ -94,7 +100,7 @@ class BasePlotter(ABC):
             if spectrum:
                 for var in pvars:
                     fft_df = pd.DataFrame()
-                    df = self._df.dropna(subset=var)
+                    df = self._get_series(var)
                     sig_len = df[self._timestamp].size
                     fft_df["freqs"] = fft.rfftfreq(sig_len)
                     fft_df[var] = fft.rfft(df[var].values)
@@ -102,11 +108,7 @@ class BasePlotter(ABC):
                     plots.append(fft_df)
             else:
                 for var in pvars:
-                    plots.append(
-                        self._df.filter([self._timestamp, var]).dropna(
-                            subset=var
-                        )
-                    )
+                    plots.append(self._get_series(var))
             if plots:
                 plot_set.append(plots)
 
@@ -162,6 +164,56 @@ class SimpleCsvPlotter(BasePlotter):
         self._opened = True
         return LogOpenProgress.OPEN_COMPLETED
 
+class _MessageStore:
+    """
+    Temporary on-disk storage of decoded rows of one J1939 message instance.
+    Rows are collected in a fixed-size buffer and appended to a raw binary
+    file when the buffer is full.
+    """
+
+    def __init__(self, path: str, signals: list[str], buffer_rows: int) -> None:
+        self._path = path
+        # Column 0 is a timestamp, the rest are signals in the DBC order
+        self.signals = signals
+        self._index = {sig: idx + 1 for idx, sig in enumerate(signals)}
+        self._buffer = numpy.empty((buffer_rows, len(signals) + 1),
+                                   dtype=numpy.float64)
+        self._count = 0
+
+    def append(self, timestamp: float, values: dict) -> None:
+        """
+        Appends a row with the given 'timestamp' and decoded signal 'values'.
+        Signals absent in 'values' (e.g. multiplexed ones) are stored as NaN.
+        """
+        row = self._buffer[self._count]
+        row.fill(numpy.nan)
+        row[0] = timestamp
+        for sig, value in values.items():
+            row[self._index[sig]] = value
+        self._count += 1
+        if self._count == len(self._buffer):
+            self.flush()
+
+    def flush(self) -> None:
+        """
+        Appends buffered rows to the file
+        """
+        if self._count:
+            with open(self._path, "ab") as file:
+                self._buffer[:self._count].tofile(file)
+            self._count = 0
+
+    def load(self, timestamp: str) -> pd.DataFrame:
+        """
+        Returns all stored rows as a DataFrame with 'timestamp' column and
+        signal columns. Signals which have no values are dropped.
+        """
+        self.flush()
+        data = numpy.fromfile(self._path, dtype=numpy.float64)
+        data = data.reshape(-1, len(self.signals) + 1)
+        df = pd.DataFrame(data, columns=[timestamp] + self.signals)
+        return df.dropna(axis="columns", how="all")
+
 # pylint: disable-next=too-many-instance-attributes
 class J1939DumpPlotter(BasePlotter):
     """
@@ -171,6 +223,7 @@ class J1939DumpPlotter(BasePlotter):
     MASK_WO_SA = 0xffffff00
     PDU1_TEMPLATE = "{can}SA{sa}.PDU1.DA{da}.{msg}"
     PDU2_TEMPLATE = "{can}SA{sa}.PDU2.GE{ge}.{msg}"
+    BUFFER_ROWS = 1024
 
     def __init__(self,
                  filename: os.PathLike[str],
@@ -199,7 +252,12 @@ class J1939DumpPlotter(BasePlotter):
         self._processed = 0
         self._reader = None
         self._msg_iterator = None
-        self._temp_file = None
+        self._temp_dir = None
+        self._stores: dict[str, _MessageStore] = {}
+        # Message instance name -> DataFrame with timestamp and its signals
+        self._frames: dict[str, pd.DataFrame] = {}
+        # Plot var -> (message instance name, signal name)
+        self._vars: dict[str, tuple[str, str]] = {}
 
     @property
     def processed(self) -> int:
@@ -208,17 +266,67 @@ class J1939DumpPlotter(BasePlotter):
         """
         return self._processed
 
+    @property
+    def plot_vars(self) -> list[str]:
+        """
+        Returns a list of plot vars labels
+        """
+        if self._opened:
+            return list(self._vars)
+        return []
+
+    def _get_series(self, var: str) -> pd.DataFrame:
+        key, sig = self._vars[var]
+        return self._frames[key][[self._timestamp, sig]].dropna(
+            subset=sig
+        ).rename(columns={sig: var})
+
+    def close(self) -> None:
+        """
+        Removes temporary files of the opening process
+        """
+        self._stores = {}
+        if self._temp_dir:
+            self._temp_dir.cleanup()
+            self._temp_dir = None
+
     def __decode_message(self, msg: can.Message) -> tuple:
         """
-        Returns a tuple of message name and message data for the given
-        CAN message 'msg'
+        Returns a tuple of cantools message and decoded message data for the
+        given CAN message 'msg'
         """
         frame_id = msg.arbitration_id & self.MASK_WO_SA
         # pylint: disable-next=protected-access
         if frame_id in self._db._frame_id_to_message:
             _msg = self._db.get_message_by_frame_id(frame_id)
-            return (_msg.name, _msg.decode(msg.data, decode_choices=False))
+            return (_msg, _msg.decode(msg.data, decode_choices=False))
         return (None, None)
+
+    def __get_store(self, key: str, db_msg) -> _MessageStore:
+        """
+        Returns a store for the message instance 'key', creates it if needed
+        """
+        store = self._stores.get(key)
+        if store is None:
+            path = os.path.join(self._temp_dir.name,
+                                str(len(self._stores)) + ".bin")
+            store = _MessageStore(path,
+                                  [sig.name for sig in db_msg.signals],
+                                  self.BUFFER_ROWS)
+            self._stores[key] = store
+        return store
+
+    def __load_frames(self) -> None:
+        """
+        Loads all stored message instances to DataFrames
+        """
+        self._frames = {}
+        self._vars = {}
+        for key, store in self._stores.items():
+            df = store.load(self._timestamp)
+            self._frames[key] = df
+            for sig in df.columns[1:]:
+                self._vars[key + "." + sig] = (key, sig)
 
     # pylint: disable-next=too-many-branches,too-many-statements
     def open(self) -> LogOpenProgress:
@@ -253,24 +361,17 @@ class J1939DumpPlotter(BasePlotter):
 
             self._processed = 0
             self._open_progress = LogOpenProgress.OPEN_IN_PROGRESS
-            # pylint: disable-next=consider-using-with
-            self._temp_file = tempfile.NamedTemporaryFile(
-                delete=False, mode='w+', suffix='.jsonl'
-            )
+            self.close()
+            self._temp_dir = tempfile.TemporaryDirectory()
 
         try:
             msg = next(self._msg_iterator)
         except StopIteration as exc:
-            self._temp_file.flush()
-            self._temp_file.seek(0)
-            self._df = pd.read_json(
-                self._temp_file.name, lines=True, convert_dates=False
-            )
-            print(self._temp_file.name)
-            self._temp_file.close()
-            os.unlink(self._temp_file.name)
-            self._df.dropna(axis="columns", how="all", inplace=True)
-            if self._timestamp in self._df.columns:
+            try:
+                self.__load_frames()
+            finally:
+                self.close()
+            if self._vars:
                 self._opened = True
                 self._open_progress = LogOpenProgress.OPEN_COMPLETED
             else:
@@ -278,8 +379,8 @@ class J1939DumpPlotter(BasePlotter):
                 raise ImportError("No data to plot in the given file",
                                   path=self._filename) from exc
         else:
-            decoded = self.__decode_message(msg)
-            if decoded[0]:
+            db_msg, decoded = self.__decode_message(msg)
+            if db_msg:
                 if msg.channel:
                     if isinstance(msg.channel, str):
                         can_ch = msg.channel + "."
@@ -293,20 +394,17 @@ class J1939DumpPlotter(BasePlotter):
                         can=can_ch,
                         sa=str(frame_unp.source_address),
                         da=str(frame_unp.pdu_specific),
-                        msg=decoded[0]
+                        msg=db_msg.name
                     )
                 else:
                     data_key = self.PDU2_TEMPLATE.format(
                         can=can_ch,
                         sa=str(frame_unp.source_address),
                         ge=str(frame_unp.pdu_specific),
-                        msg=decoded[0]
+                        msg=db_msg.name
                     )
-                msg_data = {self._timestamp: msg.timestamp}
-                for sig, value in decoded[1].items():
-                    msg_data[data_key + "." + sig] = value
-                json.dump(msg_data, self._temp_file)
-                self._temp_file.write('\n')
+                self.__get_store(data_key, db_msg).append(msg.timestamp,
+                                                          decoded)
             self._processed += 1
 
         return self._open_progress
