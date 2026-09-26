@@ -1,14 +1,29 @@
 """ Integration tests for import_dialog.py module """
 
 import pandas as pd
+import pytest
 from PyQt6.QtCore import Qt, QTimer
 from PyQt6.QtWidgets import QDialog
 
 # modules under test
+import import_dialog
 from import_dialog import ImportDialog, ImportWorker
 from plotter import J1939DumpPlotter
 
-def test_import_dialog_accepted(setup_j1939_dump_file, qtbot):
+@pytest.fixture(autouse=True)
+def import_errors(monkeypatch):
+    """
+    Replace modal "Import failed!" message box with a non-blocking stub,
+    otherwise a failed import blocks the test forever. Returns a list of
+    shown error messages.
+    """
+    errors = []
+    monkeypatch.setattr(import_dialog.QMessageBox, "critical",
+                        lambda parent, title, text: errors.append(text))
+    return errors
+
+# pylint: disable-next=redefined-outer-name
+def test_import_dialog_accepted(setup_j1939_dump_file, qtbot, import_errors):
     """
     Integration test for successful j1939 dump file opening
 
@@ -24,7 +39,7 @@ def test_import_dialog_accepted(setup_j1939_dump_file, qtbot):
     dialog = ImportDialog(plotter)
     qtbot.addWidget(dialog)
 
-    assert dialog.exec() == QDialog.DialogCode.Accepted
+    assert dialog.exec() == QDialog.DialogCode.Accepted, import_errors
     assert plotter.is_opened
     assert plotter._temp_dir is None # pylint: disable=protected-access
 

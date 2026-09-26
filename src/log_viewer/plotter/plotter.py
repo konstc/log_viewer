@@ -341,11 +341,11 @@ class J1939DumpPlotter(BasePlotter):
         given CAN message 'msg'
         """
         frame_id = msg.arbitration_id & self.MASK_WO_SA
-        # pylint: disable-next=protected-access
-        if frame_id in self._db._frame_id_to_message:
+        try:
             _msg = self._db.get_message_by_frame_id(frame_id)
-            return (_msg, _msg.decode(msg.data, decode_choices=False))
-        return (None, None)
+        except KeyError:
+            return (None, None)
+        return (_msg, _msg.decode(msg.data, decode_choices=False))
 
     def __get_store(self, key: str, db_msg) -> _MessageStore:
         """
