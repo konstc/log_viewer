@@ -4,7 +4,8 @@
 rem This script should be executed from the root of the repository
 
 if not exist .venv (
-    python -m venv .venv
+    rem Same Python version as the release build in CI
+    py -3.11 -m venv .venv
     call .venv\Scripts\activate.bat
     python -m pip install --upgrade pip
     pip install -r requirements.txt

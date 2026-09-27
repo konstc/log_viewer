@@ -5,6 +5,7 @@
 # pylint: disable=import-outside-toplevel
 
 import logging
+from math import ceil
 
 from jsonschema import validate
 from PyQt6.QtCore import pyqtSlot, Qt, QRectF, QSize
@@ -179,7 +180,9 @@ class PlotItemDelegate(QStyledItemDelegate):
         doc.setHtml(options.text)
         doc.setTextWidth(doc.idealWidth())
 
-        return QSize(doc.idealWidth(), doc.size().height())
+        # QTextDocument sizes are floats, while QSize accepts only ints
+        # (implicit float -> int conversion was removed in Python 3.10)
+        return QSize(ceil(doc.idealWidth()), ceil(doc.size().height()))
 
 class MainWindow(QMainWindow): # pylint: disable=too-many-instance-attributes
     """
