@@ -5,17 +5,21 @@
 # pylint: disable=import-outside-toplevel
 
 import logging
+from functools import lru_cache
 from math import ceil
 
 from jsonschema import validate
-from PyQt6.QtCore import pyqtSlot, Qt, QRectF, QSize
-from PyQt6.QtGui import QAction, QColor, QIcon, QPixmap, QTextDocument
+from PyQt6.QtCore import pyqtSlot, Qt, QEvent, QItemSelection, \
+                         QItemSelectionModel, QRectF, QSize, QTimer
+from PyQt6.QtGui import QAction, QColor, QIcon, QKeySequence, QPixmap, \
+                        QShortcut, QTextDocument
 from PyQt6.QtWidgets import QDialog, QFileDialog, QLabel, QListWidget, \
                             QListWidgetItem, QMainWindow, QMessageBox, \
                             QStyledItemDelegate, QStyle, QStyleOptionViewItem
 
 from generated_ui import Ui_MainWindow
 from settings_schema import APP_SETTINGS_SCHEMA
+from signal_filter import compile_filter
 from toolbar import PlotMode
 from utils import get_icons_path, load_settings, save_settings
 
@@ -39,7 +43,42 @@ class PlotItemList:
         self._items = {}
         self._plots = []
         self._lw = list_widget
+        self._filter = compile_filter("")
+        self._shown = 0
         self.add_items(items)
+
+    @property
+    def total_count(self) -> int:
+        """
+        Gets the number of all items in the list
+        """
+        return len(self._items)
+
+    @property
+    def shown_count(self) -> int:
+        """
+        Gets the number of items matching the current filter
+        """
+        return self._shown
+
+    @property
+    def selected_count(self) -> int:
+        """
+        Gets the number of selected items, including the hidden ones
+        """
+        return len(self._lw.selectionModel().selectedIndexes())
+
+    def __apply_filter(self, items: list[str]) -> None:
+        """
+        Hides the items with names 'items' that do not match the current
+        filter and shows the others
+        """
+        for item_name in items:
+            item = self._items[item_name]
+            hidden = not self._filter(item_name)
+            if item.isHidden() != hidden:
+                item.setHidden(hidden)
+                self._shown += 1 if not hidden else -1
 
     def __get_selected_items(self) -> list[str]:
         """
@@ -98,7 +137,18 @@ class PlotItemList:
                 self.item_template.format(item=item, plot="")
             )
             self._lw.addItem(self._items[item])
+        self._shown += len(items)
         self._lw.sortItems(order=Qt.SortOrder.AscendingOrder)
+        self.__apply_filter(items)
+
+    def set_filter(self, query: str) -> None:
+        """
+        Shows only the items whose names match 'query'. The selection and the
+        plot assignment of the hidden items are kept. The filter stays active
+        for the items added later
+        """
+        self._filter = compile_filter(query)
+        self.__apply_filter(list(self._items))
 
     def clear_plot_assignment(self) -> None:
         """
@@ -120,17 +170,28 @@ class PlotItemList:
 
     def select_all(self) -> None:
         """
-        Sets all items selected
+        Sets all items matching the current filter selected
         """
-        for _, item in self._items.items():
-            item.setSelected(True)
+        selection = QItemSelection()
+        model = self._lw.model()
+        first = None
+        for row in range(self._lw.count() + 1):
+            if row < self._lw.count() and not self._lw.isRowHidden(row) and \
+               self._lw.item(row).flags() & Qt.ItemFlag.ItemIsSelectable:
+                if first is None:
+                    first = row
+            elif first is not None:
+                selection.select(model.index(first, 0), model.index(row - 1, 0))
+                first = None
+        self._lw.selectionModel().select(
+            selection, QItemSelectionModel.SelectionFlag.Select
+        )
 
     def select_clear(self) -> None:
         """
-        Resets selection for all items
+        Resets selection for all items, including the hidden ones
         """
-        for _, item in self._items.items():
-            item.setSelected(False)
+        self._lw.clearSelection()
 
     def clear(self) -> None:
         """
@@ -139,6 +200,19 @@ class PlotItemList:
         self._lw.clear()
         self._items.clear()
         self._plots.clear()
+        self._shown = 0
+
+@lru_cache(maxsize=65536)
+def _html_size(html: str) -> QSize:
+    """
+    Gets the size of the HTML text 'html' laid out in one line
+    """
+    doc = QTextDocument()
+    doc.setHtml(html)
+    doc.setTextWidth(doc.idealWidth())
+
+    # QTextDocument sizes are floats, while QSize accepts only ints
+    return QSize(ceil(doc.idealWidth()), ceil(doc.size().height()))
 
 class PlotItemDelegate(QStyledItemDelegate):
     """
@@ -175,14 +249,7 @@ class PlotItemDelegate(QStyledItemDelegate):
         """
         options = QStyleOptionViewItem(option)
         self.initStyleOption(options, index)
-
-        doc = QTextDocument()
-        doc.setHtml(options.text)
-        doc.setTextWidth(doc.idealWidth())
-
-        # QTextDocument sizes are floats, while QSize accepts only ints
-        # (implicit float -> int conversion was removed in Python 3.10)
-        return QSize(ceil(doc.idealWidth()), ceil(doc.size().height()))
+        return _html_size(options.text)
 
 class MainWindow(QMainWindow): # pylint: disable=too-many-instance-attributes
     """
@@ -210,6 +277,14 @@ class MainWindow(QMainWindow): # pylint: disable=too-many-instance-attributes
         delegate = PlotItemDelegate(self._ui.listWidget)
         self._ui.listWidget.setItemDelegate(delegate)
         self._plot_items = PlotItemList([], self._ui.listWidget)
+
+        # Signal filter setup
+        # Escape and Down keys are handled in eventFilter().
+        self._ui.filterEdit.installEventFilter(self)
+        self._filter_shortcut = QShortcut(QKeySequence.StandardKey.Find, self)
+        self._count_timer = QTimer(self)
+        self._count_timer.setSingleShot(True)
+        self._count_timer.setInterval(0)
 
         # Setup action icons
         self._ui.actionPlot.setIcon(self.__icon("plot.png"))
@@ -245,6 +320,12 @@ class MainWindow(QMainWindow): # pylint: disable=too-many-instance-attributes
         self._ui.actionSelectAll.triggered.connect(self.select_all)
         self._ui.actionSelectClear.triggered.connect(self.select_clear)
         self._ui.toolBar.plot_mode_updated.connect(self.plot_mode_updated)
+        self._ui.filterEdit.textChanged.connect(self.filter_changed)
+        self._filter_shortcut.activated.connect(self.filter_focus)
+        self._ui.listWidget.itemSelectionChanged.connect(
+            self._count_timer.start
+        )
+        self._count_timer.timeout.connect(self.__update_count)
 
         logging.info("Successfully started")
 
@@ -277,6 +358,8 @@ class MainWindow(QMainWindow): # pylint: disable=too-many-instance-attributes
         self._ui.actionSpectrum.setEnabled(self._ready)
         self._ui.actionSelectAll.setEnabled(self._ready)
         self._ui.actionSelectClear.setEnabled(self._ready)
+        self._ui.filterEdit.setEnabled(self._ready)
+        self._ui.countLabel.setEnabled(self._ready)
 
         if (self._ready and self._ui.toolBar.plot_mode ==
                                                      PlotMode.PLOTMODE_MANUAL):
@@ -298,10 +381,11 @@ class MainWindow(QMainWindow): # pylint: disable=too-many-instance-attributes
         else:
             self._status_mode.setText("Mode: unknown")
 
-        # Update plot items
+        # Update plot items: the current filter applies to the added ones
         self._plot_items.clear()
         if self._ready:
             self._plot_items.add_items(self._plotter.plot_vars)
+        self.__update_count()
 
         # Update toolbar
         self._ui.toolBar.plot_mode_box.setEnabled(self._ready)
@@ -310,6 +394,33 @@ class MainWindow(QMainWindow): # pylint: disable=too-many-instance-attributes
         )
 
         self.__update_actions()
+
+    def __update_count(self) -> None:
+        """
+        Updates the counter of shown and selected plot items
+        """
+        self._count_timer.stop()
+        self._ui.countLabel.setText(
+            f"Shown {self._plot_items.shown_count} of "
+            f"{self._plot_items.total_count} · "
+            f"selected {self._plot_items.selected_count}"
+        )
+
+    def __focus_list(self) -> None:
+        """
+        Moves the keyboard focus from the filter to the list of plot items. If
+        the current item is hidden, the first shown one becomes current
+        """
+        list_widget = self._ui.listWidget
+        current = list_widget.currentItem()
+        if current is None or current.isHidden():
+            for row in range(list_widget.count()):
+                if not list_widget.isRowHidden(row):
+                    list_widget.setCurrentRow(
+                        row, QItemSelectionModel.SelectionFlag.NoUpdate
+                    )
+                    break
+        list_widget.setFocus(Qt.FocusReason.OtherFocusReason)
 
     def __import(self) -> None:
         """
@@ -414,6 +525,7 @@ class MainWindow(QMainWindow): # pylint: disable=too-many-instance-attributes
         self._plotter = None
         self._ready = False
         self.__update()
+        self._ui.filterEdit.clear()
 
     @pyqtSlot()
     def about_dialog_open(self) -> None:
@@ -596,7 +708,7 @@ class MainWindow(QMainWindow): # pylint: disable=too-many-instance-attributes
     @pyqtSlot()
     def select_all(self) -> None:
         """
-        Selects all items in the current plot list
+        Selects all shown items in the current plot list
         """
         self._plot_items.select_all()
 
@@ -606,3 +718,34 @@ class MainWindow(QMainWindow): # pylint: disable=too-many-instance-attributes
         Clear selection in the current plot list
         """
         self._plot_items.select_clear()
+
+    @pyqtSlot(str)
+    def filter_changed(self, query: str) -> None:
+        """
+        Shows only the plot items matching the filter 'query'
+        """
+        self._plot_items.set_filter(query)
+        self.__update_count()
+
+    @pyqtSlot()
+    def filter_focus(self) -> None:
+        """
+        Moves the keyboard focus to the signal filter
+        """
+        self._ui.filterEdit.setFocus(Qt.FocusReason.ShortcutFocusReason)
+        self._ui.filterEdit.selectAll()
+
+    def eventFilter(self, watched, event): # pylint: disable=invalid-name
+        """
+        Overrided eventFilter() from QObject: in the signal filter Escape
+        clears it and Down moves the focus to the list
+        """
+        if watched is self._ui.filterEdit and \
+           event.type() == QEvent.Type.KeyPress:
+            if event.key() == Qt.Key.Key_Escape:
+                self._ui.filterEdit.clear()
+                return True
+            if event.key() == Qt.Key.Key_Down:
+                self.__focus_list()
+                return True
+        return super().eventFilter(watched, event)
