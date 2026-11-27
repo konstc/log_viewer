@@ -42,6 +42,8 @@ There are two main modes:
 
 You can switch between them in Application->Settings->General->Mode.
 
+To find signals in a long list, type in the filter input field above the list (also available at Ctrl+F): the search is case-insensitive, strings separated by spaces must all match (`eec1 speed`), a string with `*` or `?` is a mask for the whole name (`*SA0.*.EEC1.*`), Esc key clears the filter. Selected signals stay selected while hidden, so you can pick them from several searches in a row; "Select All" selects only the shown ones.
+
 Settings are saved per user: in `%APPDATA%\log_viewer\app.json` on Windows and in `~/.config/log_viewer/app.json` (or `$XDG_CONFIG_HOME/log_viewer/app.json`) on Linux. Settings missing there are taken from the defaults in `cfg/app.json`. To reset the settings, delete the user's file.
 
 ### Simple CSV reader

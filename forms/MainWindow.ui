@@ -16,9 +16,32 @@
   <widget class="QWidget" name="centralwidget">
    <layout class="QVBoxLayout" name="verticalLayout_2">
     <item>
+     <widget class="QLineEdit" name="filterEdit">
+      <property name="enabled">
+       <bool>false</bool>
+      </property>
+      <property name="toolTip">
+       <string>Filter signals by name (Ctrl+F)</string>
+      </property>
+      <property name="placeholderText">
+       <string>Filter signals…</string>
+      </property>
+      <property name="clearButtonEnabled">
+       <bool>true</bool>
+      </property>
+     </widget>
+    </item>
+    <item>
      <widget class="QListWidget" name="listWidget">
       <property name="selectionMode">
        <enum>QAbstractItemView::MultiSelection</enum>
+      </property>
+     </widget>
+    </item>
+    <item>
+     <widget class="QLabel" name="countLabel">
+      <property name="enabled">
+       <bool>false</bool>
       </property>
      </widget>
     </item>
