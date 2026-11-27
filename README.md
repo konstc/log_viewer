@@ -16,7 +16,7 @@ Features:
 
 To make launching/building/testing/etc easier, shell scripts for Windows/Linux have been added, located in `scripts`.
 
-To simply launch the application, you must have Python 3.9-3.11 installed. Call `run.bat`/`run.sh` from the project root. For example:
+To simply launch the application, you must have Python 3.10-3.11 installed. Call `run.bat`/`run.sh` from the project root. For example:
 
 ```bat
 scripts\win\run.bat
